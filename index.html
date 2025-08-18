@@ -1,0 +1,929 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <base target="_top">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Générateur de billets</title>
+    <link href="https://fonts.googleapis.com/css2?family=Jost:wght@400;600&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+    <style>
+        :root {
+            --bg-color: #1c1c1c;
+            --main-color: #ab121c;
+            --text-color: #f9f9f9;
+            --text-secondary-color: #cccccc;
+        }
+
+        body {
+            font-family: 'Jost', sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            padding: 20px;
+            margin: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            box-sizing: border-box;
+            transition: background-color 0.5s ease;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 600px;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+
+        .section-container {
+            background: rgba(44, 44, 44, 0.8);
+            border-radius: 12px;
+            padding: 25px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+            border: 1px solid var(--main-color);
+            margin-bottom: 20px;
+        }
+
+        .main-section-container {
+            background-color: var(--main-color);
+        }
+
+        .section-title {
+            text-align: center;
+            margin-bottom: 25px;
+            font-weight: 600;
+            font-size: 1.8rem;
+            margin-top: 0;
+            position: relative;
+            padding-bottom: 10px;
+        }
+
+        .section-title::after {
+            content: '';
+            display: block;
+            position: absolute;
+            bottom: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            height: 3px;
+            width: 100%;
+        }
+
+        .section-title.main-title {
+            color: #f9f9f9;
+        }
+
+        .section-title.main-title::after {
+            background-color: #f9f9f9;
+        }
+
+        .section-title.log-title {
+            color: #cccccc;
+        }
+
+        .section-title.log-title::after {
+            background-color: #cccccc;
+        }
+        
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 400;
+            color: var(--text-secondary-color);
+        }
+
+        select, button, input[type="text"] {
+            width: 100%;
+            padding: 12px;
+            border-radius: 6px;
+            font-family: 'Jost', sans-serif;
+            font-size: 16px;
+            box-sizing: border-box;
+        }
+
+        select {
+            background-color: #333;
+            color: var(--text-color);
+            border: 1px solid #555;
+            -webkit-appearance: none;
+            -moz-appearance: none;
+            appearance: none;
+            cursor: pointer;
+        }
+
+        select:focus {
+            outline: none;
+            border-color: var(--main-color);
+            box-shadow: 0 0 0 2px rgba(171, 18, 28, 0.5);
+        }
+
+        .radio-group {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        
+        .radio-group input[type="radio"] {
+            display: none;
+        }
+        
+        .radio-group label {
+            display: inline-block;
+            padding: 10px 15px;
+            border: 1px solid #555;
+            border-radius: 6px;
+            background-color: #333;
+            color: var(--text-color);
+            cursor: pointer;
+            transition: background-color 0.3s ease, border-color 0.3s ease;
+            margin-right: 0;
+            margin-bottom: 0;
+        }
+        
+        .radio-group input[type="radio"]:checked + label {
+            background-color: var(--main-color);
+            border-color: var(--main-color);
+            color: white;
+        }
+
+        button {
+            background-color: var(--main-color);
+            color: white;
+            border: none;
+            cursor: pointer;
+            font-weight: 600;
+            transition: background-color 0.3s ease;
+            margin-bottom: 10px;
+        }
+        
+        .log-item-button {
+            background-color: transparent;
+            color: var(--text-color);
+            border: 1px solid var(--text-color);
+            padding: 8px 12px;
+            width: auto;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .log-item-button:hover:not(:disabled) {
+            background-color: var(--text-color);
+            color: var(--bg-color);
+        }
+
+        .log-item-button svg {
+            margin-right: 5px;
+        }
+        
+        button:hover:not(:disabled) {
+            background-color: #8c0f17;
+        }
+
+        button:disabled {
+            background-color: #555;
+            cursor: not-allowed;
+        }
+        
+        .alert {
+            margin-top: 20px;
+            padding: 5px;
+            border-radius: 6px;
+            text-align: center;
+            font-weight: 600;
+        }
+
+        .alert.success {
+            background-color: #4CAF50;
+            color: white;
+        }
+        
+        .alert.checked {
+            background-color: #ff9800;
+            color: white;
+        }
+
+        .alert.error {
+            background-color: #d60f00;
+            color: white;
+        }
+        
+        #loader {
+            display: none;
+            text-align: center;
+            margin-top: 20px;
+        }
+
+        .spinner {
+            border: 4px solid rgba(255, 255, 255, 0.1);
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            border-left-color: var(--main-color);
+            animation: spin 1.2s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .log-item {
+            background-color: #333;
+            border: 1px solid #555;
+            border-radius: 6px;
+            padding: 15px;
+            margin-bottom: 10px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .log-details {
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .log-details p {
+            margin: 0;
+            line-height: 1.4;
+        }
+        
+        .action-buttons {
+            display: flex;
+            gap: 10px;
+            align-items: stretch; 
+        }
+        
+        #printButton {
+            flex-grow: 1; 
+            width: auto; 
+            margin-bottom: 0;
+        }
+        
+        #connectButton {
+            background-color: #cccccc; 
+            flex-shrink: 0; 
+            aspect-ratio: 1 / 1; 
+            width: auto;
+            margin-bottom: 0;
+            font-size: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        #qr-reader-container {
+            display: none;
+            margin-top: 20px;
+            text-align: center;
+        }
+        
+        #qr-reader-container button {
+            background-color: var(--bg-color);
+            color: var(--text-secondary-color);
+            border: 1px solid var(--text-secondary-color);
+        }
+        
+        #qr-reader-container button:hover {
+            background-color: var(--text-secondary-color);
+            color: var(--bg-color);
+        }
+        
+        #qr-reader {
+            width: 100%;
+        }
+
+        #connectButton:hover:not(:disabled) {
+            background-color: #aaaaaa;
+        }
+
+        #connectButton.connected {
+            background-color: #4CAF50;
+        }
+
+        #connectButton.connected:hover:not(:disabled) {
+            background-color: #45a049;
+        }
+
+        @media (min-width: 480px) {
+            .log-item {
+                flex-direction: row;
+                justify-content: space-between;
+                align-items: center;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <audio id="validationSound" src="https://www.soundjay.com/buttons/beep-07a.mp3" preload="auto"></audio>
+    <audio id="errorSound" src="https://www.soundjay.com/buttons/beep-03.mp3" preload="auto"></audio>
+
+    <div class="container">
+        
+        <div class="section-container main-section-container">
+            <h1 class="section-title main-title">Choisissez un spectacle</h1>
+            <div class="form-group">
+                <select id="spectacleSelect" required>
+                    <option value="">Chargement des spectacles...</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="section-container">
+            <h2 class="section-title log-title">Génération de billets</h2>
+            <form id="ticketForm">
+                <div class="form-group">
+                    <label>Choisissez un tarif :</label>
+                    <div id="tarifRadios" class="radio-group">
+                        <p>Sélectionnez d'abord un spectacle</p>
+                    </div>
+                </div>
+                <div class="action-buttons">
+                    <button type="button" id="connectButton" class="connection-indicator">🖨️</button>
+                    <button type="submit" id="printButton" disabled>Générer et imprimer le billet</button>
+                </div>
+            </form>
+            <div id="loader" style="display: none;">
+                <div class="spinner"></div>
+                <p style="margin-top: 10px;">Génération du billet...</p>
+            </div>
+            <div id="statusMessage" class="alert" style="display: none;"></div>
+        </div>
+        
+        <div class="section-container" id="scanner-section">
+            <h2 class="section-title log-title">Contrôle des billets</h2>
+            <button id="scanButton" disabled>Ouvrir le lecteur</button>
+            <div id="scanStatusMessage" class="alert" style="display: none;"></div>
+            <div id="qr-reader-container">
+                <div id="qr-reader"></div>
+            </div>
+        </div>
+        
+        <div class="section-container">
+            <h2 class="section-title log-title">Journal des billets</h2>
+            <div id="logHeader">
+                <button id="refreshLogButton" disabled>Actualiser le journal</button>
+            </div>
+            <div id="logContainer">
+                <p style="text-align: center; color: var(--text-secondary-color);">
+                    Sélectionnez un spectacle pour afficher les billets générés.
+                </p>
+            </div>
+        </div>
+    </div>
+    
+<script>
+    const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzs18EG1eY8o8sS0DMdTGJewNRjNhT6004ofW0vWzMfR9XcaYOvJzWFnxv3pi3ypDOC9w/exec';
+    let spectaclesData = {};
+    let billetsLogData = [];
+    let bluetoothCharacteristic = null;
+    let bluetoothDevice = null;
+    let currentSpectacle = null;
+    let html5QrCode = null;
+
+    const CONNECT_BUTTON = document.getElementById('connectButton');
+    const PRINT_BUTTON = document.getElementById('printButton');
+    const SPECTACLE_SELECT = document.getElementById('spectacleSelect');
+    const SCAN_BUTTON = document.getElementById('scanButton');
+    const QR_READER_CONTAINER = document.getElementById('qr-reader-container');
+    const SCANNER_SECTION = document.getElementById('scanner-section');
+    const REFRESH_LOG_BUTTON = document.getElementById('refreshLogButton');
+
+    const PC850_MAP = {
+        'é': 0x82, 'É': 0x90, 'ê': 0x88, 'è': 0x8A, 'ë': 0x89,
+        'à': 0x85, 'À': 0xB7,
+        'î': 0x8B, 'Î': 0xED, 'ï': 0x8C, 'Ï': 0xEF,
+        'ô': 0x93, 'Ô': 0x9D, 'ö': 0x94, 'Ö': 0x99,
+        'ù': 0x97, 'Ù': 0x9B,
+        'ç': 0x80, 'Ç': 0x81
+    };
+
+    function encodeText(text) {
+        const textBytes = [];
+        for (let i = 0; i < text.length; i++) {
+            const char = text.charAt(i);
+            const code = PC850_MAP[char] !== undefined ? PC850_MAP[char] : char.charCodeAt(0);
+            textBytes.push(code);
+        }
+        return new Uint8Array(textBytes);
+    }
+    
+    function sleep(ms) {
+        return new Promise(resolve => setTimeout(resolve, ms));
+    }
+
+    async function connectBluetoothPrinter() {
+        if (!navigator.bluetooth) {
+            showStatus("Votre navigateur ne prend pas en charge l'API Web Bluetooth. Veuillez utiliser Chrome ou Edge.", "error");
+            return false;
+        }
+        
+        showStatus('Recherche d\'imprimante Bluetooth...', 'info');
+        CONNECT_BUTTON.disabled = true;
+
+        try {
+            const device = await navigator.bluetooth.requestDevice({
+                filters: [{ services: ['000018f0-0000-1000-8000-00805f9b34fb'] }]
+            });
+
+            const server = await device.gatt.connect();
+            const service = await server.getPrimaryService('000018f0-0000-1000-8000-00805f9b34fb');
+            bluetoothCharacteristic = await service.getCharacteristic('00002af1-0000-1000-8000-00805f9b34fb');
+            bluetoothDevice = device;
+
+            device.addEventListener('gattserverdisconnected', () => {
+                console.log('Imprimante déconnectée.');
+                showStatus("Imprimante déconnectée. Veuillez reconnecter.", "error");
+                bluetoothCharacteristic = null;
+                bluetoothDevice = null;
+                CONNECT_BUTTON.disabled = false;
+                CONNECT_BUTTON.classList.remove('connected');
+            });
+            
+            showStatus("✅ Connexion Bluetooth établie ! ✅", "info");
+            CONNECT_BUTTON.classList.add('connected');
+            CONNECT_BUTTON.disabled = false; 
+            return true;
+
+        } catch (error) {
+            if (error.name === 'NotFoundError') {
+                showStatus("Aucun appareil compatible n'a été trouvé. Assurez-vous que l'imprimante est en mode jumelage.", "error");
+            } else if (error.name === 'NotAllowedError') {
+                showStatus("Vous avez refusé la connexion Bluetooth. Veuillez autoriser l'accès pour continuer.", "error");
+            } else {
+                console.error("Erreur de connexion Bluetooth :", error);
+                showStatus("Connexion échouée. Assurez-vous que l'imprimante est allumée et à portée.", "error");
+            }
+            bluetoothCharacteristic = null;
+            bluetoothDevice = null;
+            CONNECT_BUTTON.disabled = false;
+            CONNECT_BUTTON.classList.remove('connected');
+            return false;
+        }
+    }
+    
+    async function printData(data) {
+        if (!bluetoothCharacteristic) {
+            throw new Error("Aucune imprimante connectée.");
+        }
+
+        let offset = 0;
+        const chunkSize = 20;
+        
+        try {
+            while (offset < data.length) {
+                const end = Math.min(offset + chunkSize, data.length);
+                const chunk = data.slice(offset, end);
+                
+                await bluetoothCharacteristic.writeValue(chunk); 
+                
+                await sleep(50);
+                
+                offset = end;
+            }
+        } catch (error) {
+            console.error("Erreur d'écriture sur la caractéristique GATT:", error);
+            throw new Error("Échec de l'impression: erreur GATT. " + error.message);
+        }
+    }
+
+    async function generatePrintCommands(data) {
+        const { spectacle, lieu, date, heure, tarif, idBillet } = data;
+        let commands = new Uint8Array(0);
+
+        const addCommand = (cmd, ...params) => {
+            const newCmd = new Uint8Array([cmd, ...params]);
+            const newCommands = new Uint8Array(commands.length + newCmd.length);
+            newCommands.set(commands);
+            newCommands.set(newCmd, commands.length);
+            commands = newCommands;
+        };
+
+        const addText = (text) => {
+            const encodedText = encodeText(text);
+            const newCommands = new Uint8Array(commands.length + encodedText.length);
+            newCommands.set(commands);
+            newCommands.set(encodedText, commands.length);
+            commands = newCommands;
+        };
+
+        addCommand(0x1B, 0x40);
+        
+        addCommand(0x1B, 0x61, 0x01);
+        addCommand(0x1D, 0x21, 0x01);
+        addText("Billet d'entree\n");
+        
+        addCommand(0x1D, 0x21, 0x00);
+        addText("Theatre du Baou\n");
+        
+        addCommand(0x1B, 0x45, 0x01);
+        addText(`${spectacle}\n`);
+        addCommand(0x1B, 0x45, 0x00);
+        
+        addText("--------------------------------\n");
+        
+        addText(`${date} ${heure}\n`);
+        
+        addText(`${lieu}\n`);
+        
+        addText("--------------------------------\n");
+        
+        addCommand(0x1B, 0x45, 0x01);
+        addCommand(0x1D, 0x21, 0x01);
+        addText(`Tarif : ${tarif}\n`);
+        addCommand(0x1B, 0x45, 0x00);
+        addCommand(0x1D, 0x21, 0x00);
+        
+        const qrData = idBillet;
+        addCommand(0x1D, 0x28, 0x6B, 0x04, 0x00, 0x31, 0x41, 0x32, 0x00);
+        addCommand(0x1D, 0x28, 0x6B, 0x03, 0x00, 0x31, 0x43, 0x05);
+        addCommand(0x1D, 0x28, 0x6B, 0x03, 0x00, 0x31, 0x45, 0x30);
+        addCommand(0x1D, 0x28, 0x6B, qrData.length + 3, 0x00, 0x31, 0x50, 0x30);
+        addText(qrData);
+        addCommand(0x1D, 0x28, 0x6B, 0x03, 0x00, 0x31, 0x51, 0x30);
+        
+        addText(`${idBillet}\n`);
+        
+        addCommand(0x0A, 0x0A, 0x0A);
+        
+        addCommand(0x1D, 0x56, 0x42, 0x00);
+
+        return commands;
+    }
+
+    function showStatus(message, type, targetId = 'statusMessage') {
+        const statusDiv = document.getElementById(targetId);
+        statusDiv.textContent = message;
+        statusDiv.className = `alert ${type}`;
+        statusDiv.style.display = 'block';
+    }
+
+    function toggleLoader(show) {
+        document.getElementById('loader').style.display = show ? 'block' : 'none';
+        PRINT_BUTTON.disabled = show;
+    }
+
+    async function fetchSpectacles() {
+        showStatus('Chargement des spectacles...', 'info');
+        try {
+            const response = await fetch(SCRIPT_URL);
+            if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+            const data = await response.json();
+            
+            if (data.error) {
+                showStatus(`Erreur de l'API : ${data.error}`, 'error');
+                return;
+            }
+            
+            const selectElement = document.getElementById('spectacleSelect');
+            selectElement.innerHTML = '<option value="">-- Sélectionnez un spectacle --</option>';
+            data.forEach(spectacle => {
+                spectaclesData[spectacle.uniqueId] = spectacle;
+                const option = document.createElement('option');
+                option.value = spectacle.uniqueId;
+                option.textContent = `${spectacle.Spectacle} - ${spectacle.Date} à ${spectacle.Heure}`;
+                selectElement.appendChild(option);
+            });
+            
+            showStatus('', '');
+            PRINT_BUTTON.disabled = false;
+            SCAN_BUTTON.disabled = false;
+        } catch (error) {
+            console.error("Erreur de chargement des spectacles :", error);
+            showStatus('Erreur de chargement des spectacles. Veuillez vérifier la connexion et l\'URL du script.', 'error');
+        }
+    }
+    
+    async function fetchBilletsLog(uniqueId) {
+        const logContainer = document.getElementById('logContainer');
+        logContainer.innerHTML = '<p style="text-align: center; color: var(--text-secondary-color);">Chargement des billets...</p>';
+        
+        try {
+            const response = await fetch(`${SCRIPT_URL}?log_for_unique_id=${encodeURIComponent(uniqueId)}`);
+            if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+            const billets = await response.json();
+            
+            if (billets.error) {
+                throw new Error(billets.error);
+            }
+            
+            billetsLogData = billets;
+
+            if (billets.length === 0) {
+                logContainer.innerHTML = '<p style="text-align: center; color: var(--text-secondary-color);">Aucun billet généré pour ce spectacle.</p>';
+            } else {
+                logContainer.innerHTML = '';
+                billets.forEach(billet => {
+                    const billetItem = document.createElement('div');
+                    billetItem.className = 'log-item';
+                    billetItem.innerHTML = `
+                        <div class="log-details">
+                            <p><strong>Tarif :</strong> ${billet.Tarif}</p>
+                            <p><strong>ID :</strong> ${billet['ID Billet']}</p>
+                        </div>
+                        <button class="log-item-button" data-spectacle-id="${billet['ID Spectacle']}" data-billet-id="${billet['ID Billet']}">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-printer-fill" viewBox="0 0 16 16">
+                                <path d="M5 1a2 2 0 0 0-2 2v2H2a2 2 0 0 0-2 2v3a2 2 0 0 0 2 2h1v1a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2v-1h1a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-1V3a2 2 0 0 0-2-2zM4 3a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2H4zm-1 2h12v3a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1zm14 5a1 1 0 0 1-1 1H2a1 1 0 0 1-1-1v-2a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1zm-1-6v2H2V4z"/>
+                            </svg>
+                            Réimprimer
+                        </button>
+                    `;
+                    logContainer.appendChild(billetItem);
+                });
+            }
+        } catch (error) {
+            console.error("Erreur de chargement des billets :", error);
+            logContainer.innerHTML = `<p style="text-align: center; color: #f44336;">Erreur de chargement du log.</p>`;
+        }
+    }
+
+    document.addEventListener('DOMContentLoaded', fetchSpectacles);
+
+    SPECTACLE_SELECT.addEventListener('change', (e) => {
+        const uniqueId = e.target.value;
+        const tarifContainer = document.getElementById('tarifRadios');
+        tarifContainer.innerHTML = '';
+
+        if (uniqueId) {
+            const spectacle = spectaclesData[uniqueId];
+            currentSpectacle = spectacle;
+            let hasTarif = false;
+            for (let i = 1; i <= 4; i++) {
+                const tarif = spectacle[`Tarif ${i}`];
+                if (tarif) {
+                    hasTarif = true;
+                    const radioInput = document.createElement('input');
+                    radioInput.type = 'radio';
+                    radioInput.name = 'tarif';
+                    radioInput.id = `tarif-${i}`;
+                    radioInput.value = tarif;
+                    radioInput.required = true;
+
+                    const radioLabel = document.createElement('label');
+                    radioLabel.setAttribute('for', `tarif-${i}`);
+                    radioLabel.textContent = tarif;
+                    
+                    tarifContainer.appendChild(radioInput);
+                    tarifContainer.appendChild(radioLabel);
+                }
+            }
+            if (!hasTarif) {
+                tarifContainer.innerHTML = `<p>Aucun tarif disponible pour ce spectacle.</p>`;
+            }
+            if (hasTarif) {
+                document.querySelector('#tarifRadios input[type="radio"]').checked = true;
+            }
+            fetchBilletsLog(uniqueId);
+            REFRESH_LOG_BUTTON.disabled = false;
+        } else {
+            currentSpectacle = null;
+            tarifContainer.innerHTML = '<p>Sélectionnez d\'abord un spectacle</p>';
+            const logContainer = document.getElementById('logContainer');
+            logContainer.innerHTML = '<p style="text-align: center; color: var(--text-secondary-color);">Sélectionnez un spectacle pour afficher les billets générés.</p>';
+            REFRESH_LOG_BUTTON.disabled = true;
+        }
+    });
+
+    CONNECT_BUTTON.addEventListener('click', connectBluetoothPrinter);
+
+    async function reprintTicket(billetId, uniqueId) {
+        toggleLoader(true);
+        showStatus('Réimpression du billet...', 'info');
+
+        try {
+            if (!bluetoothCharacteristic) {
+                const connected = await connectBluetoothPrinter();
+                if (!connected) {
+                    toggleLoader(false);
+                    return;
+                }
+            }
+            
+            const billetToReprint = billetsLogData.find(b => b['ID Billet'] === billetId);
+            if (!billetToReprint) {
+                throw new Error("Informations du billet non trouvées dans le log.");
+            }
+
+            const spectacleInfo = spectaclesData[uniqueId];
+            if (!spectacleInfo) {
+                throw new Error("Informations du spectacle non trouvées.");
+            }
+
+            const ticketData = {
+                spectacle: spectacleInfo.Spectacle,
+                lieu: spectacleInfo.Lieu,
+                date: spectacleInfo.Date,
+                heure: spectacleInfo.Heure,
+                tarif: billetToReprint.Tarif,
+                idBillet: billetId
+            };
+
+            const commands = await generatePrintCommands(ticketData);
+            await printData(commands);
+            showStatus("Billet réimprimé avec succès ! ✅", "success");
+
+        } catch (error) {
+            console.error("Erreur de réimpression :", error);
+            showStatus(`Erreur de réimpression : ${error.message}`, "error");
+        } finally {
+            toggleLoader(false);
+        }
+    }
+    
+    document.getElementById('logContainer').addEventListener('click', (e) => {
+        const button = e.target.closest('.log-item-button');
+        if (button) {
+            const billetId = button.dataset.billetId;
+            const uniqueId = button.dataset.spectacleId;
+            reprintTicket(billetId, uniqueId);
+        }
+    });
+
+    document.getElementById('ticketForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        toggleLoader(true);
+        showStatus('', '');
+
+        const uniqueId = SPECTACLE_SELECT.value;
+        const tarif = document.querySelector('input[name="tarif"]:checked') ? document.querySelector('input[name="tarif"]:checked').value : null;
+
+        if (!uniqueId || !tarif) {
+            showStatus("Veuillez choisir un spectacle et un tarif.", "error");
+            toggleLoader(false);
+            return;
+        }
+
+        try {
+            if (!bluetoothCharacteristic) {
+                const connected = await connectBluetoothPrinter();
+                if (!connected) {
+                    toggleLoader(false);
+                    return;
+                }
+            }
+
+            const formData = new URLSearchParams();
+            formData.append('uniqueId', uniqueId);
+            formData.append('tarif', tarif);
+
+            const response = await fetch(SCRIPT_URL, {
+                method: 'POST',
+                body: formData,
+            });
+
+            if (!response.ok) {
+                throw new Error(`Erreur HTTP! statut : ${response.status}`);
+            }
+            
+            const result = await response.json();
+            
+            if (result.error) {
+                throw new Error(result.error);
+            }
+
+            const spectacleInfo = spectaclesData[uniqueId];
+            const ticketToPrint = {
+                spectacle: spectacleInfo.Spectacle,
+                lieu: spectacleInfo.Lieu,
+                date: spectacleInfo.Date,
+                heure: spectacleInfo.Heure,
+                tarif: tarif,
+                idBillet: result.billetId
+            };
+
+            const logContainer = document.getElementById('logContainer');
+            const billetItem = document.createElement('div');
+            billetItem.className = 'log-item';
+            billetItem.innerHTML = `
+                <div class="log-details">
+                    <p><strong>Tarif :</strong> ${ticketToPrint.tarif}</p>
+                    <p><strong>ID :</strong> ${ticketToPrint.idBillet}</p>
+                </div>
+                <button class="log-item-button" data-spectacle-id="${uniqueId}" data-billet-id="${ticketToPrint.idBillet}">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-printer-fill" viewBox="0 0 16 16">
+                        <path d="M5 1a2 2 0 0 0-2 2v2H2a2 2 0 0 0-2 2v3a2 2 0 0 0 2 2h1v1a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2v-1h1a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-1V3a2 2 0 0 0-2-2zM4 3a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2H4zm-1 2h12v3a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1zm14 5a1 1 0 0 1-1 1H2a1 1 0 0 1-1-1v-2a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1zm-1-6v2H2V4z"/>
+                    </svg>
+                    Réimprimer
+                </button>
+            `;
+            if (logContainer.children.length > 0 && logContainer.firstElementChild.tagName === 'P') {
+                logContainer.innerHTML = '';
+            }
+            logContainer.prepend(billetItem);
+            
+            billetsLogData.unshift({
+                'ID Spectacle': uniqueId,
+                'ID Billet': ticketToPrint.idBillet,
+                'Tarif': ticketToPrint.tarif,
+                'Spectacle': ticketToPrint.spectacle
+            });
+            
+            const commands = await generatePrintCommands(ticketToPrint);
+            await printData(commands);
+            showStatus("Billet imprimé et enregistré avec succès ! ✅", "success");
+
+        } catch (error) {
+            console.error("Erreur de génération/impression :", error);
+            showStatus(`Erreur : ${error.message}`, "error");
+        } finally {
+            toggleLoader(false);
+        }
+    });
+    
+    //---------------------------------------------------------
+    // Nouvelle section : Contrôle des billets
+    //---------------------------------------------------------
+
+   SCAN_BUTTON.addEventListener('click', async () => {
+    if (!currentSpectacle) {
+        showStatus("Veuillez d'abord sélectionner un spectacle.", "error", 'scanStatusMessage');
+        return;
+    }
+
+    if (html5QrCode && html5QrCode.isScanning) {
+        html5QrCode.stop().then(() => {
+            QR_READER_CONTAINER.style.display = 'none';
+            SCAN_BUTTON.textContent = 'Ouvrir le lecteur';
+            showStatus('Lecteur de QR code fermé.', 'info', 'scanStatusMessage');
+        }).catch(err => {
+            console.error("Erreur lors de l'arrêt du lecteur :", err);
+        });
+    } else {
+        showStatus("Démarrage du lecteur de QR code...", 'info', 'scanStatusMessage');
+        QR_READER_CONTAINER.style.display = 'block';
+        SCAN_BUTTON.textContent = 'Fermer le lecteur';
+        
+        if (!html5QrCode) {
+            html5QrCode = new Html5Qrcode("qr-reader");
+        }
+        
+        const config = { fps: 10, qrbox: { width: 250, height: 250 } };
+        let lastScannedId = null;
+
+        function onScanSuccess(decodedText) {
+            if (decodedText === lastScannedId) {
+                return;
+            }
+            lastScannedId = decodedText;
+            
+            const ticketFound = billetsLogData.find(billet => billet['ID Billet'] === decodedText);
+
+            if (ticketFound) {
+                showStatus("✅ Billet valide ✅", "success", 'scanStatusMessage');
+                document.body.style.backgroundColor = '#4CAF50';
+                QR_READER_CONTAINER.style.backgroundColor = '#4CAF50';
+                SCANNER_SECTION.style.backgroundColor = '#4CAF50';
+                validationSound.play();
+                setTimeout(() => { 
+                    document.body.style.backgroundColor = 'var(--bg-color)';
+                    QR_READER_CONTAINER.style.backgroundColor = 'transparent';
+                    SCANNER_SECTION.style.backgroundColor = 'rgba(44, 44, 44, 0.8)';
+                }, 1000);
+            } else {
+                showStatus("❌ Billet invalide ❌", "error", 'scanStatusMessage');
+                document.body.style.backgroundColor = '#d60f00';
+                QR_READER_CONTAINER.style.backgroundColor = '#d60f00';
+                SCANNER_SECTION.style.backgroundColor = '#d60f00';
+                errorSound.play();
+                setTimeout(() => { 
+                    document.body.style.backgroundColor = 'var(--bg-color)';
+                    QR_READER_CONTAINER.style.backgroundColor = 'transparent';
+                    SCANNER_SECTION.style.backgroundColor = 'rgba(44, 44, 44, 0.8)';
+                }, 1000);
+            }
+
+            setTimeout(() => {
+                lastScannedId = null;
+            }, 3000);
+        }
+
+        function onScanError(errorMessage) {
+            // Pas d'action spécifique nécessaire pour l'instant
+        }
+
+        try {
+            await html5QrCode.start({ facingMode: "environment" }, config, onScanSuccess, onScanError);
+            showStatus('Lecteur de QR code prêt. Scannez un billet.', 'info', 'scanStatusMessage');
+        } catch (err) {
+            console.error("Erreur de démarrage de l'appareil photo. Vérifiez les autorisations du navigateur.", "error", 'scanStatusMessage');
+        }
+    }
+});
+
+REFRESH_LOG_BUTTON.addEventListener('click', () => {
+    const uniqueId = SPECTACLE_SELECT.value;
+    if (uniqueId) {
+        fetchBilletsLog(uniqueId);
+    }
+});
+</script>
+
+</body>
+</html>
