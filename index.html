@@ -32,7 +32,7 @@
         .container {
             width: 100%;
             max-width: 600px;
-            padding: 20px;
+            padding: 0;
             box-sizing: border-box;
         }
 
@@ -43,6 +43,8 @@
             box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
             border: 1px solid var(--main-color);
             margin-bottom: 20px;
+            margin-left: 10px;
+            margin-right: 10px;
         }
 
         .main-section-container {
@@ -150,6 +152,11 @@
             border-color: var(--main-color);
             color: white;
         }
+        
+        #tarifRadios p {
+            text-align: center;
+            color: var(--text-secondary-color);
+        }
 
         button {
             background-color: var(--main-color);
@@ -217,6 +224,10 @@
             display: none;
             text-align: center;
             margin-top: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
         }
 
         .spinner {
@@ -328,16 +339,17 @@
     <div class="container">
         
         <div class="section-container main-section-container">
-            <h1 class="section-title main-title">Choisissez un spectacle</h1>
+            <h1 class="section-title main-title">Choix du spectacle</h1>
             <div class="form-group">
                 <select id="spectacleSelect" required>
                     <option value="">Chargement des spectacles...</option>
                 </select>
             </div>
+            <div id="statusMessageSpectacle" class="alert" style="display: none;"></div>
         </div>
 
         <div class="section-container">
-            <h2 class="section-title log-title">Génération de billets</h2>
+            <h2 class="section-title log-title">Création de billets</h2>
             <form id="ticketForm">
                 <div class="form-group">
                     <label>Choisissez un tarif :</label>
@@ -347,7 +359,7 @@
                 </div>
                 <div class="action-buttons">
                     <button type="button" id="connectButton" class="connection-indicator">🖨️</button>
-                    <button type="submit" id="printButton" disabled>Générer et imprimer le billet</button>
+                    <button type="submit" id="printButton" disabled>Générer le billet</button>
                 </div>
             </form>
             <div id="loader" style="display: none;">
@@ -367,7 +379,7 @@
         </div>
         
         <div class="section-container">
-            <h2 class="section-title log-title">Journal des billets</h2>
+            <h2 class="section-title log-title">Liste des billets</h2>
             <div id="logHeader">
                 <button id="refreshLogButton" disabled>Actualiser le journal</button>
             </div>
@@ -395,6 +407,8 @@
     const QR_READER_CONTAINER = document.getElementById('qr-reader-container');
     const SCANNER_SECTION = document.getElementById('scanner-section');
     const REFRESH_LOG_BUTTON = document.getElementById('refreshLogButton');
+    const STATUS_MESSAGE_SPECTACLE = document.getElementById('statusMessageSpectacle');
+
 
     const PC850_MAP = {
         'é': 0x82, 'É': 0x90, 'ê': 0x88, 'è': 0x8A, 'ë': 0x89,
@@ -566,19 +580,19 @@
     }
 
     function toggleLoader(show) {
-        document.getElementById('loader').style.display = show ? 'block' : 'none';
+        document.getElementById('loader').style.display = show ? 'flex' : 'none';
         PRINT_BUTTON.disabled = show;
     }
 
     async function fetchSpectacles() {
-        showStatus('Chargement des spectacles...', 'info');
+        showStatus('Chargement des spectacles...', 'info', 'statusMessageSpectacle');
         try {
             const response = await fetch(SCRIPT_URL);
             if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
             const data = await response.json();
             
             if (data.error) {
-                showStatus(`Erreur de l'API : ${data.error}`, 'error');
+                showStatus(`Erreur de l'API : ${data.error}`, 'error', 'statusMessageSpectacle');
                 return;
             }
             
@@ -592,12 +606,12 @@
                 selectElement.appendChild(option);
             });
             
-            showStatus('', '');
+            showStatus('', '', 'statusMessageSpectacle');
             PRINT_BUTTON.disabled = false;
             SCAN_BUTTON.disabled = false;
         } catch (error) {
             console.error("Erreur de chargement des spectacles :", error);
-            showStatus('Erreur de chargement des spectacles. Veuillez vérifier la connexion et l\'URL du script.', 'error');
+            showStatus('Erreur de chargement des spectacles. Veuillez vérifier la connexion et l\'URL du script.', 'error', 'statusMessageSpectacle');
         }
     }
     
