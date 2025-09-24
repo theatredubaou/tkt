@@ -63,19 +63,42 @@
             }
         }
 
-        // Fonction pour vérifier le résultat du paiement après le retour de l'application SumUp
-        function checkPaymentStatus() {
-            // Obtenir les paramètres de l'URL
+        // Fonction pour vérifier si l'appareil est un iOS
+        function isIOS() {
+            const userAgent = navigator.userAgent || navigator.vendor || window.opera;
+            return /iPad|iPhone|iPod/.test(userAgent) && !window.MSStream;
+        }
+
+        // Fonctions pour gérer le callback en fonction de l'OS
+        function handleIOSPaymentCallback() {
             const urlParams = new URLSearchParams(window.location.search);
-            const result = urlParams.get('smp_result');
+            const result = urlParams.get('smp-status');
             
-            // Afficher un message en fonction du résultat
             if (result === 'success') {
                 showMessage('Paiement réussi !', false);
             } else if (result === 'failed') {
-                const errorMessage = urlParams.get('smp_message');
-                showMessage(`Paiement échoué. ${errorMessage ? 'Raison : ' + errorMessage : ''}`, true);
+                showMessage('Paiement échoué.', true);
             }
+        }
+        
+        function handleAndroidPaymentCallback() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const result = urlParams.get('smp-status');
+            
+            if (result === 'success') {
+                showMessage('Paiement réussi !', false);
+            } else if (result === 'failed') {
+                showMessage('Paiement échoué.', true);
+            }
+        }
+
+        // Fonctions pour construire l'URL de paiement en fonction de l'OS
+        function buildIOSPaymentUrl(amountInEuros, appId, affiliateKey, callbackUrl) {
+             return `sumupmerchant://pay/1.0?amount=${amountInEuros}&currency=EUR&title=Paiement&affiliate-key=${affiliateKey}&app-id=${appId}&callback=${encodeURIComponent(callbackUrl)}`;
+        }
+        
+        function buildAndroidPaymentUrl(amountInEuros, appId, affiliateKey, callbackUrl) {
+             return `sumupmerchant://pay/1.0?amount=${amountInEuros}&currency=EUR&title=Paiement&affiliateKey=${affiliateKey}&appId=${appId}&callback=${encodeURIComponent(callbackUrl)}`;
         }
         
         // Gérer la soumission du formulaire
@@ -93,7 +116,6 @@
             
             // *** IMPORTANT ***
             // Remplacez 'YOUR_APP_ID' et 'YOUR_AFFILIATE_KEY' par vos valeurs
-            // L'ID de l'application est obligatoire pour identifier votre application web.
             const appId = 'billetterie.tdb.app';
             const affiliateKey = 'sup_afk_PpB1SoCpAIYFFP4NaQteMTfjNCcukbgP';
             
@@ -106,8 +128,13 @@
             // Définir l'URL de rappel pour revenir à l'application web
             const callbackUrl = window.location.href;
             
-            // Construire l'URL de l'API SumUp Payment "switch" avec le paramètre de rappel
-            const url = `sumupmerchant://pay/1.0?amount=${amountInEuros}&currency=EUR&title=Paiement&affiliate-key=${affiliateKey}&app-id=${appId}&callback=${encodeURIComponent(callbackUrl)}`;
+            // Construire l'URL de l'API SumUp Payment "switch" en fonction de l'OS
+            let url;
+            if (isIOS()) {
+                 url = buildIOSPaymentUrl(amountInEuros, appId, affiliateKey, callbackUrl);
+            } else {
+                 url = buildAndroidPaymentUrl(amountInEuros, appId, affiliateKey, callbackUrl);
+            }
             
             // Afficher un message et rediriger vers l'application SumUp
             showMessage("Redirection vers l'application SumUp...", false);
@@ -123,8 +150,11 @@
         });
 
         // Exécuter la fonction de vérification du statut au chargement de la page
-        checkPaymentStatus();
-        
+        if (isIOS()) {
+            handleIOSPaymentCallback();
+        } else {
+            handleAndroidPaymentCallback();
+        }
     </script>
 </body>
 </html>
