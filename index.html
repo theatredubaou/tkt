@@ -77,6 +77,7 @@
         let SUMUP_APP_ID = null;
         let userId = 'anonymous'; 
         let isAuthReady = false; // Indicateur d'état d'authentification
+        let credentialsLoaded = false; // Indicateur de chargement des clés
         const projectId = firebaseConfig.projectId;
 
         // --- Initialisation des services Firebase ---
@@ -127,6 +128,16 @@
                 payButton.classList.remove('hover:bg-indigo-700');
             }
         }
+        
+        // --- Central Readiness Check ---
+        // Active le bouton de paiement et traite le callback si tout est chargé
+        function checkReadiness() {
+            if (isAuthReady && credentialsLoaded) {
+                setPayButtonState(true);
+                // Déclencher le traitement du callback UNIQUEMENT si l'authentification et les clés sont prêtes
+                handlePaymentCallback(); 
+            }
+        }
 
         // --- Authentification Firebase ---
 
@@ -153,10 +164,8 @@
                 userIdDisplay.textContent = `UID: Déconnecté`;
                 isAuthReady = false;
             }
-            // Mettre à jour l'état du bouton après l'auth et le chargement des clés
-            if (isAuthReady && SUMUP_AFFILIATE_KEY && SUMUP_APP_ID) {
-                setPayButtonState(true);
-            }
+            // Vérifier si le callback doit être traité
+            checkReadiness(); 
         });
         
         // --- Chargement sécurisé des clés SumUp ---
@@ -170,10 +179,9 @@
                 
                 showMessage('Configuration prête.', false);
                 
-                // Activer le bouton si l'auth est déjà prête
-                if (isAuthReady) {
-                    setPayButtonState(true);
-                }
+                credentialsLoaded = true; // Clés chargées
+                // Vérifier si l'auth est prête pour activer le bouton et traiter le callback
+                checkReadiness(); 
 
             } catch (error) {
                 console.error("Erreur de récupération des clés SumUp:", error);
@@ -328,11 +336,11 @@
             }
         }
 
-        // Exécuter l'authentification, le chargement des clés, et la vérification du statut au chargement de la page
+        // Exécuter l'authentification et le chargement des clés au chargement de la page
+        // Le traitement du callback se fait maintenant dans checkReadiness()
         authenticate();
         loadSumUpCredentials();
         foreignTxIdInput.value = foreignTxIdInput.value || generateUniqueId(); 
-        handlePaymentCallback();
 
     </script>
 </body>
