@@ -3,8 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Paiement SumUp</title>
-    <!-- Utilisation du CDN de Tailwind CSS pour un style moderne et mobile-first -->
+    <title>Paiement SumUp Sécurisé</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -20,7 +19,7 @@
 
     <div class="bg-white p-6 rounded-3xl shadow-2xl w-full max-w-sm">
         <h1 class="text-3xl font-bold text-center text-gray-800 mb-6">Paiement</h1>
-        <p class="text-gray-600 text-center mb-8">Veuillez indiquer le montant à encaisser.</p>
+        <p class="text-gray-600 text-center mb-8">Veuillez indiquer les détails de la transaction.</p>
 
         <form id="paymentForm" class="space-y-6">
             <div>
@@ -29,132 +28,247 @@
                     <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
                         <span class="text-gray-500 text-lg">€</span>
                     </div>
-                    <input type="number" id="amount" step="0.01" min="0.01" required placeholder="0.00"
+                    <input type="number" id="amount" step="0.01" min="0.01" value="15.00" required
                            class="block w-full rounded-xl border-0 py-3 pl-10 pr-4 text-gray-900 ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm sm:leading-6">
                 </div>
             </div>
 
-            <button type="submit"
+            <div>
+                <label for="foreignTxId" class="block text-sm font-medium text-gray-700">ID de Transaction (Ref. unique)</label>
+                <input type="text" id="foreignTxId" required placeholder="REF-UNIQUE-12345"
+                       class="mt-1 block w-full rounded-xl border-0 py-3 px-4 text-gray-900 ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm sm:leading-6">
+            </div>
+            
+            <button type="submit" id="payButton"
                     class="w-full flex justify-center py-3 px-4 border border-transparent rounded-full shadow-lg text-sm font-bold text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors duration-200">
                 Payer avec SumUp
             </button>
         </form>
         
         <div id="messageBox" class="mt-6 p-4 rounded-xl text-center font-medium hidden"></div>
+        <p id="userIdDisplay" class="text-xs text-gray-400 text-center mt-4 truncate">UID: En attente...</p>
 
     </div>
 
-    <script>
+    <script type="module">
+        // Importations nécessaires pour Firebase et Cloud Functions
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, setDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-functions.js";
+
+        // Configuration Firebase fournie par l'utilisateur
+        const firebaseConfig = {
+            apiKey: "AIzaSyB4H3DSG8p7G3kxYSOzHq1MLUlH3CxvYgQ",
+            authDomain: "billetterietdb-fa5d2.firebaseapp.com",
+            projectId: "billetterietdb-fa5d2",
+            storageBucket: "billetterietdb-fa5d2.firebasestorage.app",
+            messagingSenderId: "612825417121",
+            appId: "1:612825417121:web:1f1e45e09b1e6141ef37e0",
+            measurementId: "G-DLQ00NLJC0"
+        };
+        
+        // --- Configurations SumUp ---
+        const SUMUP_AFFILIATE_KEY = 'sup_afk_UUYEesioXQ1Uvs6Cxr8hI5fKnGjC1dGb'; // CLÉ FOURNIE
+        const SUMUP_APP_ID = 'test.tdb.app'; // ID FOURNI
+        
+        // URL de la Cloud Function pour la vérification sécurisée
+        const CLOUD_FUNCTION_URL = 'https://us-central1-billetterietdb-fa5d2.cloudfunctions.net/verifySumupTransaction';
+
+        // Initialisation des services Firebase
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        const auth = getAuth(app);
+        const functions = getFunctions(app, 'us-central1'); // Spécifier la région
+        
+        // Création de l'appelable (callable) pour la Cloud Function
+        const verifyTransaction = httpsCallable(functions, 'verifySumupTransaction');
+
+        // Variables globales pour l'application
+        let userId = 'anonymous'; 
+        const projectId = firebaseConfig.projectId;
+        
         // Récupérer les éléments du DOM
         const paymentForm = document.getElementById('paymentForm');
         const amountInput = document.getElementById('amount');
+        const foreignTxIdInput = document.getElementById('foreignTxId');
         const messageBox = document.getElementById('messageBox');
-        
-        // Fonction pour afficher un message
+        const userIdDisplay = document.getElementById('userIdDisplay');
+
+        // --- Fonctions d'Utilité ---
+
         function showMessage(text, isError = false) {
             messageBox.textContent = text;
-            messageBox.classList.remove('hidden');
+            messageBox.classList.remove('hidden', 'bg-red-100', 'text-red-800', 'bg-green-100', 'text-green-800');
             if (isError) {
                 messageBox.classList.add('bg-red-100', 'text-red-800');
-                messageBox.classList.remove('bg-green-100', 'text-green-800');
             } else {
                 messageBox.classList.add('bg-green-100', 'text-green-800');
-                messageBox.classList.remove('bg-red-100', 'text-red-800');
             }
         }
 
-        // Fonction pour vérifier si l'appareil est un iOS
-        function isIOS() {
-            const userAgent = navigator.userAgent || navigator.vendor || window.opera;
-            return /iPad|iPhone|iPod/.test(userAgent) && !window.MSStream;
+        function generateUniqueId() {
+            // Utilise un format lisible et horodaté
+            return `REF-${Date.now()}-${Math.floor(Math.random() * 999)}`;
         }
 
-        // Fonctions pour gérer le callback en fonction de l'OS
-        function handleIOSPaymentCallback() {
-            const urlParams = new URLSearchParams(window.location.search);
-            const result = urlParams.get('smp-status');
-            
-            if (result === 'success') {
-                showMessage('Paiement réussi !', false);
-            } else if (result === 'failed') {
-                showMessage('Paiement échoué.', true);
+        // --- Authentification Firebase ---
+
+        async function authenticate() {
+            try {
+                // Tente de se connecter anonymement si non connecté (le plus simple pour un frontend)
+                if (!auth.currentUser) {
+                    await signInAnonymously(auth);
+                }
+            } catch (error) {
+                console.error("Erreur d'authentification Firebase:", error);
+                showMessage("Erreur de connexion (voir console)", true);
             }
         }
+
+        onAuthStateChanged(auth, (user) => {
+            if (user) {
+                userId = user.uid;
+                userIdDisplay.textContent = `UID: ${userId}`;
+                // Si l'ID est vide, générer un ForeignTxId par défaut
+                if (!foreignTxIdInput.value) {
+                    foreignTxIdInput.value = generateUniqueId();
+                }
+            } else {
+                userIdDisplay.textContent = `UID: Déconnecté`;
+            }
+        });
         
-        function handleAndroidPaymentCallback() {
-            const urlParams = new URLSearchParams(window.location.search);
-            const result = urlParams.get('smp-status');
-            
-            if (result === 'success') {
-                showMessage('Paiement réussi !', false);
-            } else if (result === 'failed') {
-                showMessage('Paiement échoué.', true);
-            }
-        }
+        // --- Logique de Paiement ---
 
-        // Fonctions pour construire l'URL de paiement en fonction de l'OS
-        function buildIOSPaymentUrl(amountInEuros, appId, affiliateKey, callbackUrl) {
-             return `sumupmerchant://pay/1.0?amount=${amountInEuros}&currency=EUR&title=Paiement&affiliate-key=${affiliateKey}&app-id=${appId}&callback=${encodeURIComponent(callbackUrl)}`;
-        }
-        
-        function buildAndroidPaymentUrl(amountInEuros, appId, affiliateKey, callbackUrl) {
-             return `sumupmerchant://pay/1.0?amount=${amountInEuros}&currency=EUR&title=Paiement&affiliateKey=${affiliateKey}&appId=${appId}&callback=${encodeURIComponent(callbackUrl)}`;
+        /**
+         * 1. Stocke la transaction initiale dans Firestore avec le statut 'pending'.
+         * 2. Construit et lance l'URL de paiement SumUp.
+         */
+        async function initiatePayment() {
+            const amountInEuros = parseFloat(amountInput.value).toFixed(2);
+            const foreignTxId = foreignTxIdInput.value.trim();
+
+            if (isNaN(amountInEuros) || amountInEuros <= 0 || foreignTxId === '') {
+                showMessage("Veuillez entrer un montant et une référence de transaction valides.", true);
+                return;
+            }
+
+            const baseCallbackUrl = window.location.origin + window.location.pathname;
+            // Chemin d'accès Firestore : artifacts/{projectId}/users/{userId}/sumup_transactions
+            const firestoreCollectionPath = `artifacts/${projectId}/users/${userId}/sumup_transactions`;
+
+            // 1. Enregistrer l'initiation de la transaction dans Firestore
+            const initialData = {
+                amount: amountInEuros,
+                currency: 'EUR',
+                'smp-status': 'pending', // Statut initial demandé
+                userId: userId,
+                createdAt: new Date().toISOString(),
+                sumupTxCode: null,
+            };
+            
+            try {
+                // Le nom du document est le foreignTxId
+                const docRef = doc(db, firestoreCollectionPath, foreignTxId);
+                await setDoc(docRef, initialData);
+                showMessage(`Transaction ${foreignTxId} enregistrée. Redirection vers SumUp...`, false);
+
+            } catch (error) {
+                console.error("Erreur d'écriture Firestore:", error);
+                showMessage("Erreur lors de l'enregistrement initial de la transaction.", true);
+                return;
+            }
+
+            // 2. Construire l'URL de paiement SumUp
+            const commonParams = [
+                `total=${amountInEuros}`,
+                `currency=EUR`,
+                `title=Paiement Web App (${foreignTxId})`,
+                `affiliate-key=${SUMUP_AFFILIATE_KEY}`,
+                `app-id=${SUMUP_APP_ID}`,
+                `foreign-tx-id=${foreignTxId}`, 
+                // Le callback success doit s'assurer que smp-tx-code est transmis (même si SumUp le fait)
+                `callbacksuccess=${encodeURIComponent(baseCallbackUrl + '?smp-status=success&foreign-tx-id=' + foreignTxId)}`, 
+                `callbackfail=${encodeURIComponent(baseCallbackUrl + '?smp-status=failed&foreign-tx-id=' + foreignTxId)}`
+            ].join('&');
+
+            const url = `sumupmerchant://pay/1.0?${commonParams}`;
+
+            // 3. Rediriger
+            try {
+                window.location.href = url;
+            } catch (error) {
+                showMessage("Une erreur est survenue lors de la redirection.", true);
+                console.error('Erreur de redirection :', error);
+            }
         }
         
         // Gérer la soumission du formulaire
         paymentForm.addEventListener('submit', (event) => {
-            event.preventDefault(); // Empêcher le rechargement de la page
-            
-            // Récupérer le montant
-            const amountInEuros = parseFloat(amountInput.value);
-            
-            // Validation simple
-            if (isNaN(amountInEuros) || amountInEuros <= 0) {
-                showMessage("Veuillez entrer un montant valide.", true);
-                return;
-            }
-            
-            // *** IMPORTANT ***
-            // Remplacez 'YOUR_APP_ID' et 'YOUR_AFFILIATE_KEY' par vos valeurs
-            const appId = 'billetterie.tdb.app';
-            const affiliateKey = 'sup_afk_PpB1SoCpAIYFFP4NaQteMTfjNCcukbgP';
-            
-            // Si les clés ne sont pas définies, afficher une erreur
-            if (appId === 'YOUR_APP_ID' || affiliateKey === 'YOUR_AFFILIATE_KEY') {
-                showMessage("Erreur : Veuillez définir votre ID d'application et votre clé d'affiliation.", true);
-                return;
-            }
-            
-            // Définir l'URL de rappel pour revenir à l'application web
-            const callbackUrl = window.location.href;
-            
-            // Construire l'URL de l'API SumUp Payment "switch" en fonction de l'OS
-            let url;
-            if (isIOS()) {
-                 url = buildIOSPaymentUrl(amountInEuros, appId, affiliateKey, callbackUrl);
-            } else {
-                 url = buildAndroidPaymentUrl(amountInEuros, appId, affiliateKey, callbackUrl);
-            }
-            
-            // Afficher un message et rediriger vers l'application SumUp
-            showMessage("Redirection vers l'application SumUp...", false);
-            
-            try {
-                // Tenter d'ouvrir l'URL, ce qui lancera l'application SumUp si elle est installée
-                window.location.href = url;
-            } catch (error) {
-                // Gérer les erreurs de redirection
-                showMessage("Une erreur est survenue lors de la redirection.", true);
-                console.error('Erreur de redirection :', error);
-            }
+            event.preventDefault();
+            initiatePayment();
         });
 
-        // Exécuter la fonction de vérification du statut au chargement de la page
-        if (isIOS()) {
-            handleIOSPaymentCallback();
-        } else {
-            handleAndroidPaymentCallback();
+        // --- Gestion du Callback au Chargement (avec vérification côté serveur) ---
+
+        async function handlePaymentCallback() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const status = urlParams.get('smp-status');
+            const smpTxCode = urlParams.get('smp-tx-code'); 
+            const foreignTxId = urlParams.get('foreign-tx-id');
+            const smpMessage = urlParams.get('smp-message'); // Message d'échec
+
+            if (status) {
+                // Nettoyer l'URL pour éviter de re-déclencher la vérification au rechargement
+                const cleanUrl = window.location.origin + window.location.pathname;
+                window.history.replaceState({}, document.title, cleanUrl);
+                
+                if (status === 'success' && smpTxCode && foreignTxId) {
+                    
+                    showMessage(`Paiement notifié comme réussi. Réf: ${foreignTxId}. Préparation de la vérification sécurisée...`, false);
+                    
+                    // Temporisation de 3 secondes pour laisser le temps à SumUp de finaliser
+                    await new Promise(resolve => setTimeout(resolve, 3000));
+                    
+                    try {
+                        // Appel de la Cloud Function pour la vérification serveur sécurisée
+                        const result = await verifyTransaction({
+                            smpTxCode: smpTxCode,
+                            foreignTxId: foreignTxId
+                        });
+
+                        const finalStatus = result.data.sumupStatus;
+                        if (finalStatus === 'SUCCESSFUL') {
+                             showMessage(`Vérification terminée ! Transaction ${foreignTxId} est CONFIRMÉE.`, false);
+                        } else {
+                            // Le serveur SumUp a renvoyé un statut d'échec
+                            showMessage(`Alerte de vérification: Paiement notifié succès, mais statut serveur: ${finalStatus}. Veuillez vérifier dans SumUp.`, true);
+                        }
+
+                    } catch (error) {
+                        console.error("Échec de la vérification via Cloud Function:", error);
+                        // Afficher l'erreur renvoyée par la fonction si possible
+                        const errorMessage = error.details?.message || error.message || "Erreur inconnue lors de la vérification côté serveur.";
+                        showMessage(`Erreur de vérification pour ${foreignTxId}. Détails: ${errorMessage}`, true);
+                    }
+
+                } else if (status === 'failed' || status === 'cancelled') {
+                    // Afficher l'erreur sans vérification serveur
+                    const failureMessage = smpMessage ? `: ${smpMessage}` : '.';
+                    showMessage(`Paiement ÉCHOUÉ ou ANNULÉ (Réf: ${foreignTxId}). Raison${failureMessage}`, true);
+                    
+                } else {
+                     showMessage(`Statut de retour inconnu: ${status}`, true);
+                }
+            }
         }
+
+        // Exécuter l'authentification et la vérification du statut au chargement de la page
+        authenticate();
+        foreignTxIdInput.value = foreignTxIdInput.value || generateUniqueId(); 
+        handlePaymentCallback();
+
     </script>
 </body>
 </html>
