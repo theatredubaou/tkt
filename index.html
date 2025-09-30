@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Paiement SumUp Sécurisé</title>
-    <!-- Utilisation du CDN de Tailwind CSS pour un style moderne et mobile-first -->
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -23,7 +22,6 @@
         <p class="text-gray-600 text-center mb-8">Veuillez indiquer les détails de la transaction.</p>
 
         <form id="paymentForm" class="space-y-6">
-            <!-- Champ Montant -->
             <div>
                 <label for="amount" class="block text-sm font-medium text-gray-700">Montant (€)</label>
                 <div class="relative mt-1 rounded-md shadow-sm">
@@ -35,7 +33,6 @@
                 </div>
             </div>
 
-            <!-- Champ Foreign Tx ID -->
             <div>
                 <label for="foreignTxId" class="block text-sm font-medium text-gray-700">ID de Transaction (Ref. unique)</label>
                 <input type="text" id="foreignTxId" required placeholder="REF-UNIQUE-12345"
@@ -53,12 +50,11 @@
 
     </div>
 
-    <!-- Firebase SDKs -->
     <script type="module">
         // Importations nécessaires pour Firebase et Cloud Functions
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, setDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getFirestore, doc, setDoc, updateDoc, FieldValue } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
         import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-functions.js";
 
         // Configuration Firebase fournie par l'utilisateur
@@ -76,8 +72,8 @@
         let SUMUP_AFFILIATE_KEY = null;
         let SUMUP_APP_ID = null;
         let userId = 'anonymous'; 
-        let isAuthReady = false; // Indicateur d'état d'authentification
-        let credentialsLoaded = false; // Indicateur de chargement des clés
+        let isAuthReady = false; 
+        let credentialsLoaded = false;
         const projectId = firebaseConfig.projectId;
 
         // --- Initialisation des services Firebase ---
@@ -85,11 +81,10 @@
         const db = getFirestore(app);
         const auth = getAuth(app);
         
-        // ** IMPORTANT ** : Spécifier explicitement la région 'us-central1' pour éviter les erreurs CORS
+        // IMPORTANT : Spécifier explicitement la région 'us-central1' 
         const functions = getFunctions(app, 'us-central1'); 
         
-        // Création des appelables (callable) pour les Cloud Functions
-        const verifyTransaction = httpsCallable(functions, 'verifySumupTransaction');
+        // Création de l'appelable (callable) pour la Cloud Function
         const getCredentials = httpsCallable(functions, 'getSumUpCredentials');
 
 
@@ -131,7 +126,6 @@
         }
         
         // --- Central Readiness Check ---
-        // Active le bouton de paiement et traite le callback si tout est chargé
         function checkReadiness() {
             if (isAuthReady && credentialsLoaded) {
                 setPayButtonState(true);
@@ -141,7 +135,6 @@
         }
 
         // --- Authentification Firebase ---
-
         async function authenticate() {
             try {
                 if (!auth.currentUser) {
@@ -181,29 +174,39 @@
                 showMessage('Configuration prête.', false);
                 
                 credentialsLoaded = true; // Clés chargées
-                // Vérifier si l'auth est prête pour activer le bouton et traiter le callback
                 checkReadiness(); 
 
             } catch (error) {
-                // IMPORTANT: Afficher le détail de l'erreur pour le debug CORS/API
                 console.error("Erreur de récupération des clés SumUp:", error); 
                 showMessage("Erreur critique: Impossible de charger les clés SumUp (Vérifiez la console pour CORS ou région de fonction)", true);
                 setPayButtonState(false, 'Erreur de configuration');
             }
         }
         
-        // --- Logique de Paiement ---
+        // --- Fonction de mise à jour du statut Firestore (simplifié) ---
+        async function updateTransactionStatus(foreignTxId, status, smpTxCode = null) {
+            const firestoreCollectionPath = `artifacts/${projectId}/users/${userId}/sumup_transactions`;
+            const docRef = doc(db, firestoreCollectionPath, foreignTxId);
 
-        /**
-         * 1. Stocke la transaction initiale dans Firestore avec le statut 'pending'.
-         * 2. Construit et lance l'URL de paiement SumUp.
-         */
+            try {
+                await updateDoc(docRef, {
+                    'smp-status': status,
+                    sumupTxCode: smpTxCode,
+                    updatedAt: new Date().toISOString()
+                });
+            } catch (error) {
+                console.error("Erreur de mise à jour Firestore:", error);
+                showMessage(`Erreur critique: Échec de la mise à jour du statut ${status} dans Firestore.`, true);
+            }
+        }
+
+        // --- Logique de Paiement ---
         async function initiatePayment() {
             const amountInEuros = parseFloat(amountInput.value).toFixed(2);
             const foreignTxId = foreignTxIdInput.value.trim();
 
-            if (!isAuthReady) {
-                showMessage("Erreur d'authentification : Veuillez attendre la connexion Firebase.", true);
+            if (!isAuthReady || !credentialsLoaded) {
+                showMessage("Le système n'est pas prêt. Veuillez attendre le chargement.", true);
                 return;
             }
 
@@ -212,42 +215,32 @@
                 return;
             }
 
-            // Vérification finale des clés (double sécurité)
-            if (!SUMUP_AFFILIATE_KEY || !SUMUP_APP_ID) {
-                showMessage("Erreur: Les clés SumUp n'ont pas été chargées (rechargez la page).", true);
-                return;
-            }
-
-
             const baseCallbackUrl = window.location.origin + window.location.pathname;
-            // Chemin d'accès Firestore : artifacts/{projectId}/users/{userId}/sumup_transactions
             const firestoreCollectionPath = `artifacts/${projectId}/users/${userId}/sumup_transactions`;
 
-            // 1. Enregistrer l'initiation de la transaction dans Firestore
+            // 1. Enregistrer l'initiation de la transaction dans Firestore (PENDING)
             const initialData = {
                 amount: amountInEuros,
                 currency: 'EUR',
-                'smp-status': 'pending', // Statut initial demandé
+                'smp-status': 'pending', 
                 userId: userId,
                 createdAt: new Date().toISOString(),
                 sumupTxCode: null,
             };
             
             try {
-                // Le nom du document est le foreignTxId
                 const docRef = doc(db, firestoreCollectionPath, foreignTxId);
                 await setDoc(docRef, initialData);
                 showMessage(`Transaction ${foreignTxId} enregistrée. Redirection vers SumUp...`, false);
 
             } catch (error) {
-                // S'assurer que le bouton reste actif pour réessayer
                 setPayButtonState(true);
                 console.error("Erreur d'écriture Firestore:", error);
                 showMessage("Erreur lors de l'enregistrement initial de la transaction (voir console).", true);
                 return;
             }
 
-            // 2. Construire l'URL de paiement SumUp
+            // 2. Construire l'URL de paiement SumUp (Utilisation de callbacksuccess/callbackfail)
             const commonParams = [
                 `total=${amountInEuros}`,
                 `currency=EUR`,
@@ -278,68 +271,41 @@
             initiatePayment();
         });
 
-        // --- Gestion du Callback au Chargement (avec vérification côté serveur) ---
-
+        // --- Gestion du Callback au Chargement (Simplifié) ---
         async function handlePaymentCallback() {
             const urlParams = new URLSearchParams(window.location.search);
             const status = urlParams.get('smp-status');
             const smpTxCode = urlParams.get('smp-tx-code'); 
             const foreignTxId = urlParams.get('foreign-tx-id');
-            const smpMessage = urlParams.get('smp-message'); // Message d'échec
+            const smpMessage = urlParams.get('smp-message'); 
 
             if (status) {
-                // Nettoyer l'URL pour éviter de re-déclencher la vérification au rechargement
+                // Nettoyer l'URL pour éviter de re-déclencher au rechargement
                 const cleanUrl = window.location.origin + window.location.pathname;
                 window.history.replaceState({}, document.title, cleanUrl);
                 
-                if (status === 'success' && smpTxCode && foreignTxId) {
+                if (status === 'success' && foreignTxId) {
+                    // Affichage et mise à jour Firestore SANS vérification API
+                    showMessage(`✅ PAIEMENT RÉUSSI. Réf: ${foreignTxId}. (Statut basé sur le retour d'URL)`, false);
+                    await updateTransactionStatus(foreignTxId, 'SUCCESS', smpTxCode); 
                     
-                    showMessage(`Paiement notifié comme réussi. Réf: ${foreignTxId}. Déclenchement de la vérification sécurisée...`, false);
-                    setPayButtonState(false, 'Vérification en cours...');
-                    
-                    // Temporisation de 3 secondes pour laisser le temps à SumUp de finaliser
-                    await new Promise(resolve => setTimeout(resolve, 3000));
-                    
-                    try {
-                        // Appel de la Cloud Function pour la vérification serveur sécurisée
-                        const result = await verifyTransaction({
-                            smpTxCode: smpTxCode,
-                            foreignTxId: foreignTxId
-                        });
-
-                        const finalStatus = result.data.sumupStatus;
-                        if (finalStatus === 'SUCCESSFUL') {
-                             showMessage(`✅ VÉRIFICATION TERMINÉE : Transaction ${foreignTxId} est CONFIRMÉE.`, false);
-                        } else {
-                            // Le serveur SumUp a renvoyé un statut d'échec
-                            showMessage(`⚠️ ALERTE : Paiement notifié succès, mais statut serveur: ${finalStatus}. Détails en console.`, true);
-                        }
-
-                    } catch (error) {
-                        console.error("Échec de la vérification via Cloud Function:", error);
-                        // Afficher l'erreur renvoyée par la fonction si possible
-                        const errorMessage = error.details?.message || error.message || "Erreur inconnue.";
-                        showMessage(`❌ Échec de la vérification pour ${foreignTxId}. Détails: ${errorMessage}`, true);
-                    }
-                    setPayButtonState(true); // Réactiver le bouton après la vérification
                 } 
                 
                 else if (status === 'failed' || status === 'cancelled') {
-                    // Afficher l'erreur sans vérification serveur
+                    // Afficher l'erreur et mettre à jour Firestore
                     const failureMessage = smpMessage ? `: ${smpMessage}` : '.';
                     showMessage(`❌ Paiement ÉCHOUÉ ou ANNULÉ (Réf: ${foreignTxId}). Raison${failureMessage}`, true);
-                    setPayButtonState(true);
+                    await updateTransactionStatus(foreignTxId, 'FAILED', smpTxCode); 
                 } 
                 
                 else {
                      showMessage(`Statut de retour inconnu: ${status}`, true);
-                     setPayButtonState(true);
                 }
+                setPayButtonState(true); // Réactiver le bouton
             }
         }
 
         // Exécuter l'authentification et le chargement des clés au chargement de la page
-        // Le traitement du callback se fait maintenant dans checkReadiness()
         authenticate();
         loadSumUpCredentials();
         foreignTxIdInput.value = foreignTxIdInput.value || generateUniqueId(); 
