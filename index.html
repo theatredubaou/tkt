@@ -84,7 +84,8 @@
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
         const auth = getAuth(app);
-        // Utiliser la région 'us-central1' par défaut (région de la Cloud Function)
+        
+        // ** IMPORTANT ** : Spécifier explicitement la région 'us-central1' pour éviter les erreurs CORS
         const functions = getFunctions(app, 'us-central1'); 
         
         // Création des appelables (callable) pour les Cloud Functions
@@ -184,8 +185,9 @@
                 checkReadiness(); 
 
             } catch (error) {
-                console.error("Erreur de récupération des clés SumUp:", error);
-                showMessage("Erreur critique: Impossible de charger les clés SumUp (voir console)", true);
+                // IMPORTANT: Afficher le détail de l'erreur pour le debug CORS/API
+                console.error("Erreur de récupération des clés SumUp:", error); 
+                showMessage("Erreur critique: Impossible de charger les clés SumUp (Vérifiez la console pour CORS ou région de fonction)", true);
                 setPayButtonState(false, 'Erreur de configuration');
             }
         }
